@@ -59,99 +59,63 @@ import joblib
 joblib.dump(disease_metadata, "disease_metadata.pkl")
 
 import streamlit as st
+import pandas as pd
 import joblib
-import numpy as np
+from sklearn.preprocessing import MultiLabelBinarizer
 
-# Load models and metadata
-model = joblib.load("disease_model.pkl")
+# Load model and encoders
+disease_model = joblib.load("disease_model.pkl")
 label_encoder = joblib.load("label_encoder.pkl")
 symptom_encoder = joblib.load("symptom_encoder.pkl")
 disease_metadata = joblib.load("disease_metadata.pkl")
 
-# App Configuration
-st.set_page_config("AI-Powered Disease Predictor", layout="centered", page_icon="🧠")
-st.markdown("""
-    <h1 style='text-align: center; color: white;'>🤖 AI-Powered Disease Predictor</h1>
-    <p style='text-align: center; color: gray;'>Select your symptoms below from the list or enter manually.</p>
-""", unsafe_allow_html=True)
-
-# --- UI Styling ---
-st.markdown("""
-    <style>
-    .stButton>button {
-        background-color: #ff4b4b;
-        color: white;
-        font-weight: bold;
-        border: 1px solid red;
-        border-radius: 8px;
-    }
-    .stButton>button:hover {
-        background-color: #ff0000;
-    }
-    .block-container {
-        padding-top: 2rem;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- User Input ---
+# Load all symptoms from the encoder
 all_symptoms = list(symptom_encoder.classes_)
-selected_symptoms = st.multiselect("Select Symptoms:", options=all_symptoms)
 
-manual_input = st.text_input("Or type symptoms manually (comma separated):", placeholder="e.g. headache, fatigue")
+# Streamlit UI
+st.set_page_config(page_title="AI Disease Predictor", layout="centered")
+st.title("🤖 AI-Powered Disease Predictor")
+st.markdown("Select your symptoms below from the list.")
 
-# Merge selected and typed symptoms
-if manual_input:
-    typed = [s.strip().lower().replace(" ", "_") for s in manual_input.split(",")]
-    selected_symptoms += [s for s in typed if s in all_symptoms]
+# Symptom selection
+selected_symptoms = st.multiselect("Select Symptoms:", all_symptoms)
 
-selected_symptoms = list(set(selected_symptoms))  # remove duplicates
+# Predict button
+if st.button("🔍 Predict Disease"):
+    if selected_symptoms:
+        # Prepare input for model
+        input_vector = symptom_encoder.transform([selected_symptoms])
+        prediction = disease_model.predict(input_vector)[0]
+        confidence = max(disease_model.predict_proba(input_vector)[0]) * 100
+        predicted_disease = label_encoder.inverse_transform([prediction])[0].lower()
 
-if st.button("Predict Disease"):
-    if not selected_symptoms:
-        st.warning("Please select or enter at least one valid symptom.")
+        # Show Prediction
+        st.success(f"🧾 Predicted Disease: {predicted_disease.title()}")
+        st.info(f"📈 Confidence: {confidence:.2f}%")
+
+        # Fetch metadata
+        info = disease_metadata.get(predicted_disease, {})
+
+        if info:
+            st.markdown(f"### 📘 Description")
+            st.write(info['description'])
+
+            st.markdown("### ⚠️ Precautions")
+            for i, p in enumerate(info['precautions'], 1):
+                st.markdown(f"{i}. {p}")
+
+            st.markdown("### 💊 Medications")
+            for m in info['medications']:
+                st.markdown(f"- {m}")
+
+            st.markdown("### 🥗 Diet Plan")
+            for d in info['diet']:
+                st.markdown(f"- {d}")
+
+            st.markdown("### 🏃 Recommended Workout")
+            for w in info['workout']:
+                st.markdown(f"- {w}")
+        else:
+            st.warning("ℹ️ No extra information found for this disease.")
     else:
-        try:
-            input_vector = symptom_encoder.transform([selected_symptoms])
-            proba = model.predict_proba(input_vector)[0]
-            pred_index = np.argmax(proba)
-            predicted_disease = label_encoder.inverse_transform([pred_index])[0]
-            confidence = round(proba[pred_index] * 100, 2)
-
-            info = disease_metadata.get(predicted_disease.lower(), {})
-
-            st.success(f"🧠 **Predicted Disease:** {predicted_disease.title()}")
-            st.info(f"**Confidence:** {confidence}%")
-
-            # Description
-            if info.get("description"):
-                st.subheader("📘 Description")
-                st.write(info["description"])
-
-            # Precautions
-            if info.get("precautions"):
-                st.subheader("⚠️ Precautions to Take")
-                for i, p in enumerate(info["precautions"], 1):
-                    st.markdown(f"{i}. {p}")
-
-            # Medications
-            if info.get("medications"):
-                st.subheader("💊 Recommended Medications")
-                for m in info["medications"]:
-                    st.markdown(f"- {m}")
-
-            # Diet
-            if info.get("diet"):
-                st.subheader("🥗 Suggested Diet")
-                for d in info["diet"]:
-                    st.markdown(f"- {d}")
-
-            # Workout
-            if info.get("workout"):
-                st.subheader("🏃 Workout Suggestions")
-                workout_cleaned = [w for w in info["workout"] if isinstance(w, str) and len(w) > 3]
-                for w in workout_cleaned:
-                    st.markdown(f"- {w}")
-
-        except Exception as e:
-            st.error(f"Error during prediction: {e}")
+        st.warning("Please select at least one symptom to proceed.")
