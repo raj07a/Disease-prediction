@@ -54,27 +54,72 @@ for disease in old_symptom_df["Disease"].unique():
     }
 
 # Save the metadata for use in your app
-import joblib
-joblib.dump(disease_metadata, "disease_metadata.pkl")
-
-import joblib
 import streamlit as st
+import joblib
+
+# Load model & encoders
+model = joblib.load("disease_model.pkl")
+label_encoder = joblib.load("label_encoder.pkl")
+symptom_encoder = joblib.load("symptom_encoder.pkl")
 disease_metadata = joblib.load("disease_metadata.pkl")
 
-predicted_disease = "diabetes"  # This will come from your ML model
-info = disease_metadata.get(predicted_disease.lower(), {})
+# Page config
+st.set_page_config("Disease Predictor AI", layout="centered")
+st.title("🧠 Disease Prediction & Medical Advisor")
 
-st.markdown(f"### 🧠 Disease Info: {predicted_disease.title()}")
-st.write(f"📘 Description: {info['description']}")
-st.write("⚠️ Precautions:")
-for i, p in enumerate(info['precautions'], 1):
-    st.markdown(f"{i}. {p}")
-st.write("💊 Medications:")
-for m in info['medications']:
-    st.markdown(f"- {m}")
-st.write("🥗 Diet Plan:")
-for d in info['diet']:
-    st.markdown(f"- {d}")
-st.write("🏃 Recommended Workout:")
-for w in info['workout']:
-    st.markdown(f"- {w}")
+# Multiselect
+st.subheader("🩺 Select Symptoms")
+all_symptoms = list(symptom_encoder.classes_)
+selected_symptoms = st.multiselect("Choose symptoms you're experiencing:", options=all_symptoms)
+
+if st.button("🔍 Predict"):
+    if not selected_symptoms:
+        st.warning("⚠️ Please select at least one symptom.")
+    else:
+        # Predict
+        input_vector = symptom_encoder.transform([selected_symptoms])
+        proba = model.predict_proba(input_vector)[0]
+        pred_index = proba.argmax()
+        predicted_disease = label_encoder.inverse_transform([pred_index])[0]
+        confidence = round(proba[pred_index] * 100, 2)
+
+        # Get disease info
+        info = disease_metadata.get(predicted_disease.lower(), {})
+
+        st.success(f"🧠 Predicted Disease: **{predicted_disease}**")
+        st.progress(confidence / 100.0, text=f"Confidence: {confidence}%")
+
+        if info:
+            # Description
+            if info.get("description"):
+                with st.expander("📘 Description"):
+                    st.write(info["description"])
+
+            # Precautions
+            if info.get("precautions"):
+                with st.expander("⚠️ Precautions"):
+                    for i, p in enumerate(info["precautions"], 1):
+                        st.markdown(f"{i}. {p}")
+
+            # Medications
+            if info.get("medications"):
+                with st.expander("💊 Medications"):
+                    meds = [m for m in info["medications"] if isinstance(m, str)]
+                    for m in meds:
+                        st.markdown(f"- {m}")
+
+            # Diet
+            if info.get("diet"):
+                with st.expander("🥗 Diet Recommendations"):
+                    for d in info["diet"]:
+                        st.markdown(f"- {d}")
+
+            # Workout
+            if info.get("workout"):
+                with st.expander("🏃 Workout Suggestions"):
+                    workout_cleaned = list({w for w in info["workout"] if isinstance(w, str) and len(w) > 3 and predicted_disease.lower() not in w.lower()})
+                    for w in workout_cleaned:
+                        st.markdown(f"- {w}")
+        else:
+            st.warning("No metadata found for this disease.")
+
