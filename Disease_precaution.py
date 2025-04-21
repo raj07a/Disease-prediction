@@ -56,6 +56,10 @@ for disease in old_symptom_df["Disease"].unique():
 # Save the metadata for use in your app
 import joblib
 joblib.dump(disease_metadata, "disease_metadata.pkl")
+joblib.dump(model, "disease_model.pkl")
+joblib.dump(label_encoder, "label_encoder.pkl")
+joblib.dump(symptom_encoder, "symptom_encoder.pkl")
+
 
 import streamlit as st
 import joblib
