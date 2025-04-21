@@ -58,87 +58,102 @@ import joblib
 joblib.dump(disease_metadata, "disease_metadata.pkl")
 
 
-
 import streamlit as st
 import joblib
+import numpy as np
 
-import streamlit as st
-import joblib
-
-# Load the saved metadata
+# Load models and metadata
+model = joblib.load("disease_model.pkl")
+label_encoder = joblib.load("label_encoder.pkl")
+symptom_encoder = joblib.load("symptom_encoder.pkl")
 disease_metadata = joblib.load("disease_metadata.pkl")
 
-# Example predicted disease (this should come from your ML model in actual use)
-predicted_disease = "diabetes"
-info = disease_metadata.get(predicted_disease.lower(), {})
+# App Configuration
+st.set_page_config("AI-Powered Disease Predictor", layout="centered", page_icon="🧠")
+st.markdown("""
+    <h1 style='text-align: center; color: white;'>🤖 AI-Powered Disease Predictor</h1>
+    <p style='text-align: center; color: gray;'>Select your symptoms below from the list or enter manually.</p>
+""", unsafe_allow_html=True)
 
-# Set page config and style
-st.set_page_config(page_title="Disease Information", layout="wide")
-st.markdown(
-    """
+# --- UI Styling ---
+st.markdown("""
     <style>
-    .main {
-        background-color: #f7f9fc;
-        padding: 20px;
+    .stButton>button {
+        background-color: #ff4b4b;
+        color: white;
+        font-weight: bold;
+        border: 1px solid red;
+        border-radius: 8px;
     }
-    .section-title {
-        font-size: 22px;
-        color: #2c3e50;
-        margin-top: 30px;
-        margin-bottom: 10px;
+    .stButton>button:hover {
+        background-color: #ff0000;
     }
-    .content-block {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
+    .block-container {
+        padding-top: 2rem;
     }
     </style>
-    """,
-    unsafe_allow_html=True
-)
+""", unsafe_allow_html=True)
 
-st.title("🧠 Disease Insights")
+# --- User Input ---
+all_symptoms = list(symptom_encoder.classes_)
+selected_symptoms = st.multiselect("Select Symptoms:", options=all_symptoms)
 
-st.subheader(f"🔍 Disease Predicted: `{predicted_disease.title()}`")
+manual_input = st.text_input("Or type symptoms manually (comma separated):", placeholder="e.g. headache, fatigue")
 
-# Description Section
-st.markdown("### 📘 Description")
-st.markdown(f"<div class='content-block'>{info.get('description', 'No description available.')}</div>", unsafe_allow_html=True)
+# Merge selected and typed symptoms
+if manual_input:
+    typed = [s.strip().lower().replace(" ", "_") for s in manual_input.split(",")]
+    selected_symptoms += [s for s in typed if s in all_symptoms]
 
-# Columns for multiple sections
-col1, col2 = st.columns(2)
+selected_symptoms = list(set(selected_symptoms))  # remove duplicates
 
-# Precautions
-with col1:
-    st.markdown("### ⚠️ Precautions")
-    if info.get("precautions"):
-        for i, p in enumerate(info["precautions"], 1):
-            st.markdown(f"- {p}")
+if st.button("Predict Disease"):
+    if not selected_symptoms:
+        st.warning("Please select or enter at least one valid symptom.")
     else:
-        st.markdown("No precautions available.")
+        try:
+            input_vector = symptom_encoder.transform([selected_symptoms])
+            proba = model.predict_proba(input_vector)[0]
+            pred_index = np.argmax(proba)
+            predicted_disease = label_encoder.inverse_transform([pred_index])[0]
+            confidence = round(proba[pred_index] * 100, 2)
 
-# Medications
-with col2:
-    st.markdown("### 💊 Medications")
-    if info.get("medications"):
-        for m in info["medications"]:
-            st.markdown(f"- {m}")
-    else:
-        st.markdown("No medications listed.")
+            info = disease_metadata.get(predicted_disease.lower(), {})
 
-# Diet Plan
-st.markdown("### 🥗 Diet Plan")
-if info.get("diet"):
-    st.markdown("<div class='content-block'>" + "".join(f"<li>{d}</li>" for d in info["diet"]) + "</div>", unsafe_allow_html=True)
-else:
-    st.markdown("No diet plan available.")
+            st.success(f"🧠 **Predicted Disease:** {predicted_disease.title()}")
+            st.info(f"**Confidence:** {confidence}%")
 
-# Workout
-st.markdown("### 🏃 Recommended Workout")
-if info.get("workout"):
-    st.markdown("<div class='content-block'>" + "".join(f"<li>{w}</li>" for w in info["workout"]) + "</div>", unsafe_allow_html=True)
-else:
-    st.markdown("No workout recommendation available.")
+            # Description
+            if info.get("description"):
+                st.subheader("📘 Description")
+                st.write(info["description"])
+
+            # Precautions
+            if info.get("precautions"):
+                st.subheader("⚠️ Precautions to Take")
+                for i, p in enumerate(info["precautions"], 1):
+                    st.markdown(f"{i}. {p}")
+
+            # Medications
+            if info.get("medications"):
+                st.subheader("💊 Recommended Medications")
+                for m in info["medications"]:
+                    st.markdown(f"- {m}")
+
+            # Diet
+            if info.get("diet"):
+                st.subheader("🥗 Suggested Diet")
+                for d in info["diet"]:
+                    st.markdown(f"- {d}")
+
+            # Workout
+            if info.get("workout"):
+                st.subheader("🏃 Workout Suggestions")
+                workout_cleaned = [w for w in info["workout"] if isinstance(w, str) and len(w) > 3]
+                for w in workout_cleaned:
+                    st.markdown(f"- {w}")
+
+        except Exception as e:
+            st.error(f"Error during prediction: {e}")
+
 
