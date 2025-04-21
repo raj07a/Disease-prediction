@@ -55,8 +55,8 @@ for disease in old_symptom_df["Disease"].unique():
 
 # Save the metadata for use in your app
 import joblib
-joblib.dump(disease_metadata, "disease_metadata.pkl")
 
+joblib.dump(disease_metadata, "disease_metadata.pkl")
 
 import streamlit as st
 import joblib
@@ -155,5 +155,3 @@ if st.button("Predict Disease"):
 
         except Exception as e:
             st.error(f"Error during prediction: {e}")
-
-
