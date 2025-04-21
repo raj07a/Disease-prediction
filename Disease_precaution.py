@@ -54,6 +54,10 @@ for disease in old_symptom_df["Disease"].unique():
     }
 
 # Save the metadata for use in your app
+import joblib
+joblib.dump(disease_metadata, "disease_metadata.pkl")
+
+# Save the metadata for use in your app
 import streamlit as st
 import joblib
 
