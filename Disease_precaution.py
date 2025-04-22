@@ -86,31 +86,48 @@ def get_precautions(disease_name):
         return ["No precautions found."]
     return row.iloc[0, 1:].dropna().tolist()
 
-# -------------------- Step 10: Streamlit UI --------------------
+# -------------------- Step 10: Streamlit UI (Enhanced) --------------------
 st.set_page_config(page_title="Disease Predictor AI", layout="centered")
-st.title("🤖 AI-Powered Disease Predictor")
+st.markdown("<h1 style='text-align: center;'>🤖 AI-Powered Disease Predictor</h1>", unsafe_allow_html=True)
 
-st.markdown("Select your symptoms below from the list.")
-
+st.markdown("### 🩺 Select your symptoms from the list below:")
 valid_symptoms = list(mlb.classes_)
-user_symptoms = st.multiselect("Select Symptoms:", options=valid_symptoms)
+user_symptoms = st.multiselect("🧬 Symptoms", options=valid_symptoms)
 
-if st.button("Predict Disease"):
+col1, col2 = st.columns([1, 2])
+with col1:
+    use_full_dataset = st.checkbox("📊 Use full dataset (not balanced)", value=False)
+
+if st.button("🔍 Predict Disease"):
     if user_symptoms:
         disease, confidence = predict_disease(user_symptoms)
         precautions = get_precautions(disease)
 
-        st.success(f"**Predicted Disease:** {disease}")
-        st.info(f"**Confidence:** {confidence}%")
-        st.write("**Precautions to Take:**")
-        for i, p in enumerate(precautions, 1):
-            st.markdown(f"{i}. {p}")
+        st.success(f"🧠 Predicted Disease: {disease}")
+        st.progress(confidence / 100.0)
+        st.info(f"📈 Confidence Level: {confidence}%")
+
+        with st.expander("⚠️ Recommended Precautions"):
+            for i, p in enumerate(precautions, 1):
+                st.markdown(f"{i}. {p}")
+
+        st.balloons()
     else:
-        st.warning("Please select at least one symptom to proceed.")
+        st.warning("⚠️ Please select at least one symptom to get prediction.")
 
+# -------------------- Step 11: Disease Frequency Plot (Styled) --------------------
+st.subheader("📊 Disease Frequency Distribution")
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# -------------------- Step 11: Disease Distribution Plot --------------------
-st.subheader("📊 Disease Frequency Distribution in Dataset")
-distribution_chart = symptom_df['Disease'].value_counts().plot(kind='bar', figsize=(12, 4))
-st.pyplot(distribution_chart.get_figure())
+fig, ax = plt.subplots(figsize=(12, 5))
+sns.countplot(data=symptom_df, y="Disease", order=symptom_df["Disease"].value_counts().index[:15], palette="coolwarm", ax=ax)
+ax.set_title("Top 15 Disease Occurrences in Dataset")
+st.pyplot(fig)
 
+# -------------------- Step 12: Footer --------------------
+st.markdown("""
+---
+<small>Developed with ❤️ using AI & Streamlit  
+<br>Author: <b>Your Name</b> | Research Intern @ SPSU</small>
+""", unsafe_allow_html=True)
