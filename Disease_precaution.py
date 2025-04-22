@@ -1,4 +1,12 @@
+# 🔧 metadata_builder.py
 import pandas as pd
+import joblib
+from sklearn.preprocessing import MultiLabelBinarizer, LabelEncoder
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.utils import resample
+from sklearn.metrics import accuracy_score, classification_report
+import numpy as np
 
 # Load datasets
 old_symptom_df = pd.read_csv("DiseaseAndSymptoms.csv")
@@ -9,12 +17,11 @@ workout_df = pd.read_csv("workout_df.csv")
 description_df = pd.read_csv("description.csv")
 new_precaution_df = pd.read_csv("precautions_df.csv")
 
-# Clean function
+# Clean disease names
 def clean_disease_names(df, column):
     df[column] = df[column].str.strip().str.lower()
     return df
 
-# Apply cleaning
 old_symptom_df = clean_disease_names(old_symptom_df, "Disease")
 old_precaution_df = clean_disease_names(old_precaution_df, "Disease")
 diet_df = clean_disease_names(diet_df, "Disease")
@@ -23,7 +30,7 @@ workout_df = clean_disease_names(workout_df, "disease")
 description_df = clean_disease_names(description_df, "Disease")
 new_precaution_df = clean_disease_names(new_precaution_df, "Disease")
 
-# Build metadata dictionary
+# Build metadata dict
 disease_metadata = {}
 
 for disease in old_symptom_df["Disease"].unique():
@@ -53,88 +60,120 @@ for disease in old_symptom_df["Disease"].unique():
         )
     }
 
-# Save the metadata for use in your app
-import joblib
-
+# Save metadata
 joblib.dump(disease_metadata, "disease_metadata.pkl")
 
+# 🔧 train_model.py
+# Load and preprocess training data
+symptom_df = pd.read_csv("DiseaseAndSymptoms.csv")
+symptom_cols = [col for col in symptom_df.columns if col.startswith("Symptom")]
+
+symptom_df[symptom_cols] = symptom_df[symptom_cols].fillna("")
+symptom_df["all_symptoms"] = symptom_df[symptom_cols].values.tolist()
+symptom_df["all_symptoms"] = symptom_df["all_symptoms"].apply(lambda x: sorted(set(s.strip().lower() for s in x if s.strip() != "")))
+symptom_df["all_symptoms_str"] = symptom_df["all_symptoms"].apply(lambda x: ",".join(x))
+symptom_df.drop_duplicates(subset=["Disease", "all_symptoms_str"], inplace=True)
+
+# Balance dataset
+min_count = symptom_df["Disease"].value_counts().min()
+balanced_df = pd.concat([
+    group.sample(min_count, random_state=42)
+    for _, group in symptom_df.groupby("Disease")
+])
+
+# Encode
+mlb = MultiLabelBinarizer()
+X = mlb.fit_transform(balanced_df["all_symptoms"])
+le = LabelEncoder()
+y = le.fit_transform(balanced_df["Disease"])
+
+# Train/test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train model
+model = RandomForestClassifier(n_estimators=200, max_depth=20, random_state=42)
+model.fit(X_train, y_train)
+
+# Evaluate
+print("Accuracy:", accuracy_score(y_test, model.predict(X_test)))
+print(classification_report(y_test, model.predict(X_test), labels=np.unique(y_test), target_names=le.inverse_transform(np.unique(y_test)), zero_division=0))
+
+# Save model & encoders
+joblib.dump(model, "disease_model.pkl")
+joblib.dump(mlb, "symptom_encoder.pkl")
+joblib.dump(le, "disease_encoder.pkl")
 import streamlit as st
-import joblib
+# Load components
+try:
+    disease_model = joblib.load("disease_model.pkl")
+    symptom_encoder = joblib.load("symptom_encoder.pkl")
+    label_encoder = joblib.load("disease_encoder.pkl")
+    disease_metadata = joblib.load("disease_metadata.pkl")
+    freq_df = pd.read_csv("DiseaseAndSymptoms.csv")
+except Exception as e:
+    st.error(f"❌ Required file missing or unreadable: {e}")
+    st.stop()
 
-# Load the saved metadata
-disease_metadata = joblib.load("disease_metadata.pkl")
+# UI config
+st.set_page_config("AI Disease Predictor", layout="wide")
+st.title("🧠 AI Disease Predictor & Medical Assistant")
+st.markdown("Select symptoms to predict a disease and view treatment suggestions.")
 
-# Example predicted disease (this should come from your ML model in actual use)
-predicted_disease = "diabetes"
-info = disease_metadata.get(predicted_disease.lower(), {})
+symptoms = list(symptom_encoder.classes_)
+selected_symptoms = st.multiselect("🩺 Select Symptoms:", symptoms)
 
-# Set page config and style
-st.set_page_config(page_title="Disease Information", layout="wide")
-st.markdown(
-    """
-    <style>
-    .main {
-        background-color: #f7f9fc;
-        padding: 20px;
-    }
-    .section-title {
-        font-size: 22px;
-        color: #2c3e50;
-        margin-top: 30px;
-        margin-bottom: 10px;
-    }
-    .content-block {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-st.title("🧠 Disease Insights")
-
-st.subheader(f"🔍 Disease Predicted: `{predicted_disease.title()}`")
-
-# Description Section
-st.markdown("### 📘 Description")
-st.markdown(f"<div class='content-block'>{info.get('description', 'No description available.')}</div>", unsafe_allow_html=True)
-
-# Columns for multiple sections
-col1, col2 = st.columns(2)
-
-# Precautions
-with col1:
-    st.markdown("### ⚠️ Precautions")
-    if info.get("precautions"):
-        for i, p in enumerate(info["precautions"], 1):
-            st.markdown(f"- {p}")
+if st.button("🔍 Predict Disease"):
+    if not selected_symptoms:
+        st.warning("Please select symptoms.")
     else:
-        st.markdown("No precautions available.")
+        input_vector = symptom_encoder.transform([selected_symptoms])
+        proba = disease_model.predict_proba(input_vector)[0]
+        pred_idx = np.argmax(proba)
+        pred_disease = label_encoder.inverse_transform([pred_idx])[0].lower()
+        confidence = round(proba[pred_idx] * 100, 2)
 
-# Medications
-with col2:
-    st.markdown("### 💊 Medications")
-    if info.get("medications"):
-        for m in info["medications"]:
-            st.markdown(f"- {m}")
-    else:
-        st.markdown("No medications listed.")
+        st.success(f"✅ Predicted Disease: {pred_disease.title()}")
+        st.info(f"📊 Confidence Score: {confidence:.2f}%")
 
-# Diet Plan
-st.markdown("### 🥗 Diet Plan")
-if info.get("diet"):
-    st.markdown("<div class='content-block'>" + "".join(f"<li>{d}</li>" for d in info["diet"]) + "</div>", unsafe_allow_html=True)
-else:
-    st.markdown("No diet plan available.")
+        info = disease_metadata.get(pred_disease, {})
 
-# Workout
-st.markdown("### 🏃 Recommended Workout")
-if info.get("workout"):
-    st.markdown("<div class='content-block'>" + "".join(f"<li>{w}</li>" for w in info["workout"]) + "</div>", unsafe_allow_html=True)
-else:
-    st.markdown("No workout recommendation available.")
+        st.markdown("### 📘 Description")
+        st.markdown(f"<div class='content-block'>{info.get('description', 'No description available.')}</div>", unsafe_allow_html=True)
 
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### ⚠️ Precautions")
+            for i, p in enumerate(info.get("precautions", []), 1):
+                st.markdown(f"{i}. {p}")
+        with col2:
+            st.markdown("### 💊 Medications")
+            for m in info.get("medications", []):
+                st.markdown(f"- {m}")
+
+        st.markdown("### 🥗 Diet Plan")
+        for d in info.get("diet", []):
+            st.markdown(f"- {d}")
+        st.markdown("### 🏃 Workout")
+        for w in info.get("workout", []):
+            st.markdown(f"- {w}")
+
+        st.markdown("### 📊 Disease Frequency Chart")
+        try:
+            disease_counts = freq_df["Disease"].value_counts()
+            fig, ax = plt.subplots(figsize=(10, 3))
+            disease_counts.plot(kind="bar", ax=ax, color="#66b3ff")
+            plt.xticks(rotation=45)
+            st.pyplot(fig)
+        except:
+            st.warning("Chart error.")
+
+st.markdown("""
+<style>
+.content-block {
+    background-color: #f8f9fa;
+    padding: 16px;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+</style>
+""", unsafe_allow_html=True)
