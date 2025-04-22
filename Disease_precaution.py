@@ -122,58 +122,43 @@ st.markdown("Select symptoms to predict a disease and view treatment suggestions
 symptoms = list(symptom_encoder.classes_)
 selected_symptoms = st.multiselect("🩺 Select Symptoms:", symptoms)
 
-if st.button("🔍 Predict Disease"):
-    if not selected_symptoms:
-        st.warning("Please select symptoms.")
+if st.button("🔍 Predict"):
+    if not selected:
+        st.warning("Please select at least one symptom.")
     else:
-        input_vector = symptom_encoder.transform([selected_symptoms])
-        proba = disease_model.predict_proba(input_vector)[0]
-        pred_idx = np.argmax(proba)
-        pred_disease = label_encoder.inverse_transform([pred_idx])[0].lower()
-        confidence = round(proba[pred_idx] * 100, 2)
+        try:
+            X_input = symptom_encoder.transform([selected])
+            proba = disease_model.predict_proba(X_input)[0]
+            idx = np.argmax(proba)
+            disease = label_encoder.inverse_transform([idx])[0].lower()
+            confidence = round(proba[idx] * 100, 2)
+        except Exception as e:
+            st.error(f"Prediction error: {e}")
+            st.stop()
 
-        st.success(f"✅ Predicted Disease: {pred_disease.title()}")
-        st.info(f"📊 Confidence Score: {confidence:.2f}%")
+        st.success(f"✅ Disease: {disease.title()}")
+        st.info(f"Confidence: {confidence}%")
 
-        info = disease_metadata.get(pred_disease, {})
+        info = disease_metadata.get(disease, {})
 
-        st.markdown("### 📘 Description")
-        st.markdown(f"<div class='content-block'>{info.get('description', 'No description available.')}</div>", unsafe_allow_html=True)
+        st.subheader("📘 Description")
+        st.write(info.get("description", "No description available."))
 
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("### ⚠️ Precautions")
-            for i, p in enumerate(info.get("precautions", []), 1):
-                st.markdown(f"{i}. {p}")
+            st.subheader("⚠️ Precautions")
+            for p in info.get("precautions", []):
+                st.markdown(f"- {p}")
         with col2:
-            st.markdown("### 💊 Medications")
+            st.subheader("💊 Medications")
             for m in info.get("medications", []):
                 st.markdown(f"- {m}")
 
-        st.markdown("### 🥗 Diet Plan")
+        st.subheader("🥗 Diet")
         for d in info.get("diet", []):
             st.markdown(f"- {d}")
-        st.markdown("### 🏃 Workout")
+
+        st.subheader("🏃 Workout")
         for w in info.get("workout", []):
             st.markdown(f"- {w}")
 
-        st.markdown("### 📊 Disease Frequency Chart")
-        try:
-            disease_counts = freq_df["Disease"].value_counts()
-            fig, ax = plt.subplots(figsize=(10, 3))
-            disease_counts.plot(kind="bar", ax=ax, color="#66b3ff")
-            plt.xticks(rotation=45)
-            st.pyplot(fig)
-        except:
-            st.warning("Chart error.")
-
-st.markdown("""
-<style>
-.content-block {
-    background-color: #f8f9fa;
-    padding: 16px;
-    border-radius: 10px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-}
-</style>
-""", unsafe_allow_html=True)
