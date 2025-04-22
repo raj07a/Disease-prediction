@@ -85,18 +85,13 @@ def get_precautions(disease_name):
     if row.empty:
         return ["No precautions found."]
     return row.iloc[0, 1:].dropna().tolist()
-
-# -------------------- Step 10: Streamlit UI (Enhanced) --------------------
+# -------------------- Step 10: Streamlit UI (Clean & Enhanced) --------------------
 st.set_page_config(page_title="Disease Predictor AI", layout="centered")
 st.markdown("<h1 style='text-align: center;'>🤖 AI-Powered Disease Predictor</h1>", unsafe_allow_html=True)
 
 st.markdown("### 🩺 Select your symptoms from the list below:")
 valid_symptoms = list(mlb.classes_)
 user_symptoms = st.multiselect("🧬 Symptoms", options=valid_symptoms)
-
-col1, col2 = st.columns([1, 2])
-with col1:
-    use_full_dataset = st.checkbox("📊 Use full dataset (not balanced)", value=False)
 
 if st.button("🔍 Predict Disease"):
     if user_symptoms:
@@ -110,12 +105,10 @@ if st.button("🔍 Predict Disease"):
         with st.expander("⚠️ Recommended Precautions"):
             for i, p in enumerate(precautions, 1):
                 st.markdown(f"{i}. {p}")
-
-        st.balloons()
     else:
         st.warning("⚠️ Please select at least one symptom to get prediction.")
 
-# -------------------- Step 11: Disease Frequency Plot (Styled) --------------------
+# -------------------- Step 11: Disease Frequency Plot --------------------
 st.subheader("📊 Disease Frequency Distribution")
 import matplotlib.pyplot as plt
 import seaborn as sns
