@@ -11,7 +11,7 @@ import streamlit as st
 import matplotlib.pyplot as plt
 
 # -------------------- Step 1: Load Datasets --------------------
-symptom_df = pd.read_csv("Diseaseandsymptoms.csv")
+symptom_df = pd.read_csv("DiseaseAndSymptoms.csv")
 precaution_df = pd.read_csv("Disease precaution.csv")
 
 
