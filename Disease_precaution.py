@@ -85,42 +85,117 @@ def get_precautions(disease_name):
     if row.empty:
         return ["No precautions found."]
     return row.iloc[0, 1:].dropna().tolist()
-# -------------------- Step 10: Streamlit UI (Clean & Enhanced) --------------------
-st.set_page_config(page_title="Disease Predictor AI", layout="centered")
-st.markdown("<h1 style='text-align: center;'>🤖 AI-Powered Disease Predictor</h1>", unsafe_allow_html=True)
+# -------------------- Step 10: Streamlit UI (Enhanced + Larger Text UI) --------------------
+st.set_page_config(page_title="Disease Predictor AI", layout="wide")
+
+# Custom CSS for font sizes and padding
+st.markdown("""
+    <style>
+    h1, h2, h3, .big-text {
+        font-size: 28px !important;
+    }
+    .stTextInput>div>div>input {
+        font-size: 18px;
+    }
+    .stMultiSelect>div>div>div>div {
+        font-size: 18px;
+    }
+    .stButton>button {
+        font-size: 18px;
+        padding: 0.5em 2em;
+    }
+    .stDataFrame {
+        font-size: 16px;
+    }
+    .stAlert>div {
+        font-size: 18px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.markdown("<h1 style='text-align: center; color:#2E86C1;'>🤖 AI-Powered Disease Predictor</h1>", unsafe_allow_html=True)
 
 st.markdown("### 🩺 Select your symptoms from the list below:")
 valid_symptoms = list(mlb.classes_)
 user_symptoms = st.multiselect("🧬 Symptoms", options=valid_symptoms)
 
-if st.button("🔍 Predict Disease"):
-    if user_symptoms:
-        disease, confidence = predict_disease(user_symptoms)
-        precautions = get_precautions(disease)
+# Basic dictionary (can expand)
+disease_descriptions = {
+    "diabetes": "A chronic condition that affects the way your body processes blood sugar (glucose).",
+    "migraine": "A neurological condition that can cause multiple symptoms, often intense headaches.",
+    "hypertension": "Also known as high blood pressure, it can lead to heart problems if untreated.",
+    "arthritis": "Inflammation of joints causing pain and stiffness, typically worsens with age.",
+    "common cold": "A viral infectious disease of the upper respiratory tract."
+}
 
-        st.success(f"🧠 Predicted Disease: {disease}")
-        st.progress(confidence / 100.0)
-        st.info(f"📈 Confidence Level: {confidence}%")
-
-        with st.expander("⚠️ Recommended Precautions"):
-            for i, p in enumerate(precautions, 1):
-                st.markdown(f"{i}. {p}")
+# Risk calculation
+def get_risk_level(num_symptoms):
+    if num_symptoms >= 6:
+        return "High"
+    elif num_symptoms >= 3:
+        return "Moderate"
     else:
-        st.warning("⚠️ Please select at least one symptom to get prediction.")
+        return "Low"
 
-# -------------------- Step 11: Disease Frequency Plot --------------------
-st.subheader("📊 Disease Frequency Distribution")
-import matplotlib.pyplot as plt
-import seaborn as sns
+# -------------------- Step 11: Prediction --------------------
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-fig, ax = plt.subplots(figsize=(12, 5))
+col1, col2 = st.columns([3, 1])
+
+with col1:
+    if st.button("🔍 Predict Disease"):
+        if user_symptoms:
+            disease, confidence = predict_disease(user_symptoms)
+            precautions = get_precautions(disease)
+            description = disease_descriptions.get(disease.lower(), "No description available.")
+            risk = get_risk_level(len(user_symptoms))
+
+            # Save to history
+            st.session_state.history.append({
+                "Symptoms": ", ".join(user_symptoms),
+                "Disease": disease,
+                "Confidence": f"{confidence}%",
+                "Risk Level": risk
+            })
+
+            st.markdown(f"<h3 style='color:green;'>🧠 Predicted Disease: <b>{disease}</b></h3>", unsafe_allow_html=True)
+            st.progress(confidence / 100.0)
+            st.markdown(f"<div class='big-text'>📈 <b>Confidence:</b> {confidence}%</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='big-text'>🔶 <b>Risk Level:</b> {risk}</div>", unsafe_allow_html=True)
+
+            with st.expander("📘 Disease Description"):
+                st.write(description)
+
+            with st.expander("⚠️ Recommended Precautions"):
+                for i, p in enumerate(precautions, 1):
+                    st.markdown(f"{i}. {p}")
+        else:
+            st.warning("⚠️ Please select at least one symptom to get prediction.")
+
+with col2:
+    if st.button("🔄 Reset"):
+        st.session_state.history = []
+        st.experimental_rerun()
+
+# -------------------- Step 12: Frequency Plot --------------------
+st.markdown("### 📊 Top 15 Most Frequent Diseases in Dataset")
+fig, ax = plt.subplots(figsize=(12, 6))
 sns.countplot(data=symptom_df, y="Disease", order=symptom_df["Disease"].value_counts().index[:15], palette="coolwarm", ax=ax)
-ax.set_title("Top 15 Disease Occurrences in Dataset")
+ax.set_title("Disease Frequency in Dataset", fontsize=16)
 st.pyplot(fig)
 
-# -------------------- Step 12: Footer --------------------
+# -------------------- Step 13: Prediction History Table --------------------
+if st.session_state.history:
+    st.markdown("### 🧾 Prediction History")
+    hist_df = pd.DataFrame(st.session_state.history)
+    st.dataframe(hist_df, use_container_width=True)
+
+# -------------------- Step 14: Footer --------------------
 st.markdown("""
 ---
-<small>Developed with ❤️ using AI & Streamlit  
-<br>Author: <b>Your Name</b> | Research Intern @ SPSU</small>
+<div style='font-size:16px;'>
+Developed with ❤️ using <b>Streamlit</b>  
+<br>Author: <b>RAJA RAWAT</b> | Research Intern @ <b>SPSU</b>
+</div>
 """, unsafe_allow_html=True)
