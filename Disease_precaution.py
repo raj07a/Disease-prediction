@@ -85,14 +85,21 @@ def get_precautions(disease_name):
     if row.empty:
         return ["No precautions found."]
     return row.iloc[0, 1:].dropna().tolist()
-# -------------------- Step 10: Streamlit UI (Enhanced + Larger Text UI) --------------------
+
+
+# -------------------- Step 10: Streamlit UI (Full Upgrade with Description + Age/Gender) --------------------
 st.set_page_config(page_title="Disease Predictor AI", layout="wide")
 
-# Custom CSS for font sizes and padding
+# Load description.csv and build a dictionary
+desc_df = pd.read_csv("description.csv")
+desc_df["Disease"] = desc_df["Disease"].str.lower().str.strip()
+desc_dict = dict(zip(desc_df["Disease"], desc_df["Description"]))
+
+# Custom CSS for styling
 st.markdown("""
     <style>
     h1, h2, h3, .big-text {
-        font-size: 28px !important;
+        font-size: 26px !important;
     }
     .stTextInput>div>div>input {
         font-size: 18px;
@@ -100,12 +107,12 @@ st.markdown("""
     .stMultiSelect>div>div>div>div {
         font-size: 18px;
     }
+    .stSelectbox>div>div>div {
+        font-size: 18px;
+    }
     .stButton>button {
         font-size: 18px;
         padding: 0.5em 2em;
-    }
-    .stDataFrame {
-        font-size: 16px;
     }
     .stAlert>div {
         font-size: 18px;
@@ -115,20 +122,15 @@ st.markdown("""
 
 st.markdown("<h1 style='text-align: center; color:#2E86C1;'>🤖 AI-Powered Disease Predictor</h1>", unsafe_allow_html=True)
 
-st.markdown("### 🩺 Select your symptoms from the list below:")
+# UI Inputs
+st.markdown("### 🧬 Select Symptoms")
 valid_symptoms = list(mlb.classes_)
-user_symptoms = st.multiselect("🧬 Symptoms", options=valid_symptoms)
+user_symptoms = st.multiselect("🩺 Symptoms", options=valid_symptoms)
 
-# Basic dictionary (can expand)
-disease_descriptions = {
-    "diabetes": "A chronic condition that affects the way your body processes blood sugar (glucose).",
-    "migraine": "A neurological condition that can cause multiple symptoms, often intense headaches.",
-    "hypertension": "Also known as high blood pressure, it can lead to heart problems if untreated.",
-    "arthritis": "Inflammation of joints causing pain and stiffness, typically worsens with age.",
-    "common cold": "A viral infectious disease of the upper respiratory tract."
-}
+age_group = st.selectbox("👤 Select Age Group:", ["< 18", "18 - 35", "36 - 60", "60+"])
+gender = st.selectbox("⚧ Select Gender:", ["Male", "Female", "Other"])
 
-# Risk calculation
+# Risk Logic
 def get_risk_level(num_symptoms):
     if num_symptoms >= 6:
         return "High"
@@ -137,32 +139,37 @@ def get_risk_level(num_symptoms):
     else:
         return "Low"
 
-# -------------------- Step 11: Prediction --------------------
+# Initialize session state for prediction history
 if "history" not in st.session_state:
     st.session_state.history = []
 
 col1, col2 = st.columns([3, 1])
 
+# Prediction + Result
 with col1:
     if st.button("🔍 Predict Disease"):
         if user_symptoms:
             disease, confidence = predict_disease(user_symptoms)
             precautions = get_precautions(disease)
-            description = disease_descriptions.get(disease.lower(), "No description available.")
+            description = desc_dict.get(disease.lower(), "No description available.")
             risk = get_risk_level(len(user_symptoms))
 
-            # Save to history
+            # Save history
             st.session_state.history.append({
                 "Symptoms": ", ".join(user_symptoms),
+                "Age Group": age_group,
+                "Gender": gender,
                 "Disease": disease,
                 "Confidence": f"{confidence}%",
-                "Risk Level": risk
+                "Risk": risk
             })
 
             st.markdown(f"<h3 style='color:green;'>🧠 Predicted Disease: <b>{disease}</b></h3>", unsafe_allow_html=True)
             st.progress(confidence / 100.0)
-            st.markdown(f"<div class='big-text'>📈 <b>Confidence:</b> {confidence}%</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='big-text'>🔶 <b>Risk Level:</b> {risk}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='big-text'>📈 Confidence: <b>{confidence}%</b></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='big-text'>🔶 Risk Level: <b>{risk}</b></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='big-text'>👤 Age Group: <b>{age_group}</b></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='big-text'>⚧ Gender: <b>{gender}</b></div>", unsafe_allow_html=True)
 
             with st.expander("📘 Disease Description"):
                 st.write(description)
@@ -171,8 +178,9 @@ with col1:
                 for i, p in enumerate(precautions, 1):
                     st.markdown(f"{i}. {p}")
         else:
-            st.warning("⚠️ Please select at least one symptom to get prediction.")
+            st.warning("⚠️ Please select at least one symptom.")
 
+# Reset column
 with col2:
     if st.button("🔄 Reset"):
         st.session_state.history = []
@@ -185,7 +193,7 @@ sns.countplot(data=symptom_df, y="Disease", order=symptom_df["Disease"].value_co
 ax.set_title("Disease Frequency in Dataset", fontsize=16)
 st.pyplot(fig)
 
-# -------------------- Step 13: Prediction History Table --------------------
+# -------------------- Step 13: Prediction History --------------------
 if st.session_state.history:
     st.markdown("### 🧾 Prediction History")
     hist_df = pd.DataFrame(st.session_state.history)
@@ -196,6 +204,7 @@ st.markdown("""
 ---
 <div style='font-size:16px;'>
 Developed with ❤️ using <b>Streamlit</b>  
-<br>Author: <b>RAJA RAWAT</b> | Research Intern @ <b>SPSU</b>
+<br>Author: <b>Your Name</b> | Research Intern @ <b>SPSU</b>
 </div>
 """, unsafe_allow_html=True)
+
