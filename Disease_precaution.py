@@ -87,22 +87,59 @@ def get_precautions(disease_name):
     return row.iloc[0, 1:].dropna().tolist()
 
 
-# -------------------- Step 10: Streamlit UI (Full Upgrade with Description + Age/Gender) --------------------
-st.set_page_config(page_title="Disease Predictor AI", layout="wide")
+# -------------------- Step 10: Streamlit UI (Final Professional Version) --------------------
+st.set_page_config(page_title="Disease Predictor AI", layout="centered")
 
-# Load description.csv and build a dictionary
-desc_df = pd.read_csv("description.csv")
-desc_df["Disease"] = desc_df["Disease"].str.lower().str.strip()
-desc_dict = dict(zip(desc_df["Disease"], desc_df["Description"]))
+# Manual description dictionary (based on 41 diseases)
+disease_descriptions = {
+    "aids": "AIDS weakens the immune system by destroying important cells that fight disease and infection.",
+    "acne": "A skin condition that occurs when hair follicles become clogged with oil and dead skin cells.",
+    "alcoholic hepatitis": "Liver inflammation caused by excessive alcohol consumption.",
+    "allergy": "A condition in which the immune system reacts abnormally to a foreign substance.",
+    "arthritis": "Inflammation of joints causing pain and stiffness.",
+    "bronchial asthma": "A respiratory condition marked by spasms in the bronchi of the lungs.",
+    "cervical spondylosis": "Age-related wear and tear affecting the spinal disks in your neck.",
+    "chicken pox": "A highly contagious viral infection causing an itchy, blister-like rash.",
+    "chronic cholestasis": "Reduced bile flow from the liver leading to accumulation of bile acids.",
+    "common cold": "A viral upper respiratory tract infection causing sneezing, sore throat, and congestion.",
+    "dengue": "A mosquito-borne viral infection causing high fever, rash, and muscle pain.",
+    "diabetes": "A metabolic disease that causes high blood sugar levels over a prolonged period.",
+    "dimorphic hemmorhoids(piles)": "Swollen veins in the anus and lower rectum causing discomfort and bleeding.",
+    "drug reaction": "An abnormal response of the body to a medication.",
+    "fungal infection": "Diseases caused by fungi that can affect skin, nails, lungs, or internal organs.",
+    "gerd": "Gastroesophageal reflux disease - stomach acid frequently flows back into the esophagus.",
+    "gastroenteritis": "Inflammation of the stomach and intestines causing diarrhea, vomiting, and cramps.",
+    "heart attack": "A blockage of blood flow to the heart muscle.",
+    "hepatitis b": "A serious liver infection caused by the hepatitis B virus.",
+    "hepatitis c": "A viral infection that causes liver inflammation, sometimes leading to serious damage.",
+    "hepatitis d": "A liver infection caused by the hepatitis D virus; occurs only in those infected with HBV.",
+    "hepatitis e": "A liver disease caused by the hepatitis E virus, often spread via contaminated water.",
+    "hypertension": "A condition in which the force of the blood against the artery walls is too high.",
+    "hyperthyroidism": "Overproduction of hormones by the thyroid gland.",
+    "hypoglycemia": "A condition caused by a very low level of blood sugar (glucose).",
+    "hypothyroidism": "A condition in which the thyroid gland doesn't produce enough hormones.",
+    "impetigo": "A highly contagious skin infection causing red sores, mostly in children.",
+    "jaundice": "A liver condition that causes yellowing of skin and eyes due to excess bilirubin.",
+    "malaria": "A disease caused by a plasmodium parasite, transmitted by mosquito bites.",
+    "migraine": "A neurological condition causing intense, debilitating headaches.",
+    "osteoarthristis": "Degeneration of joint cartilage and the underlying bone, common in older people.",
+    "paralysis (brain hemorrhage)": "Loss of muscle function due to brain damage from bleeding.",
+    "peptic ulcer diseae": "Sores that develop on the inside lining of your stomach or small intestine.",
+    "pneumonia": "Infection that inflames air sacs in one or both lungs, possibly with fluid.",
+    "psoriasis": "A chronic autoimmune condition that causes the rapid buildup of skin cells.",
+    "tuberculosis": "A potentially serious infectious disease that mainly affects the lungs.",
+    "typhoid": "A bacterial infection due to Salmonella typhi, usually spread through contaminated food/water.",
+    "urinary tract infection": "An infection in any part of your urinary system (kidneys, bladder, urethra).",
+    "varicose veins": "Swollen, twisted veins that lie just under the skin and usually occur in the legs.",
+    "hepatitis a": "A highly contagious liver infection caused by the hepatitis A virus.",
+    "paroymsal  positional vertigo": "A sudden sensation of spinning caused by changes in head position."
+}
 
-# Custom CSS for styling
+# Custom CSS
 st.markdown("""
     <style>
-    h1, h2, h3, .big-text {
+    h1, h2, h3 {
         font-size: 26px !important;
-    }
-    .stTextInput>div>div>input {
-        font-size: 18px;
     }
     .stMultiSelect>div>div>div>div {
         font-size: 18px;
@@ -112,7 +149,7 @@ st.markdown("""
     }
     .stButton>button {
         font-size: 18px;
-        padding: 0.5em 2em;
+        padding: 0.4em 1.5em;
     }
     .stAlert>div {
         font-size: 18px;
@@ -139,67 +176,38 @@ def get_risk_level(num_symptoms):
     else:
         return "Low"
 
-# Initialize session state for prediction history
-if "history" not in st.session_state:
-    st.session_state.history = []
+# -------------------- Step 11: Prediction --------------------
+if st.button("🔍 Predict Disease"):
+    if user_symptoms:
+        disease, confidence = predict_disease(user_symptoms)
+        precautions = get_precautions(disease)
+        description = disease_descriptions.get(disease.lower(), "No description available.")
+        risk = get_risk_level(len(user_symptoms))
 
-col1, col2 = st.columns([3, 1])
+        st.markdown(f"<h3 style='color:green;'>🧠 Predicted Disease: <b>{disease}</b></h3>", unsafe_allow_html=True)
+        st.progress(confidence / 100.0)
+        st.markdown(f"<div style='font-size:18px;'>📈 Confidence: <b>{confidence}%</b></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:18px;'>🔶 Risk Level: <b>{risk}</b></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:18px;'>👤 Age Group: <b>{age_group}</b></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:18px;'>⚧ Gender: <b>{gender}</b></div>", unsafe_allow_html=True)
 
-# Prediction + Result
-with col1:
-    if st.button("🔍 Predict Disease"):
-        if user_symptoms:
-            disease, confidence = predict_disease(user_symptoms)
-            precautions = get_precautions(disease)
-            description = desc_dict.get(disease.lower(), "No description available.")
-            risk = get_risk_level(len(user_symptoms))
+        with st.expander("📘 Disease Description"):
+            st.write(description)
 
-            # Save history
-            st.session_state.history.append({
-                "Symptoms": ", ".join(user_symptoms),
-                "Age Group": age_group,
-                "Gender": gender,
-                "Disease": disease,
-                "Confidence": f"{confidence}%",
-                "Risk": risk
-            })
+        with st.expander("⚠️ Recommended Precautions"):
+            for i, p in enumerate(precautions, 1):
+                st.markdown(f"{i}. {p}")
+    else:
+        st.warning("⚠️ Please select at least one symptom.")
 
-            st.markdown(f"<h3 style='color:green;'>🧠 Predicted Disease: <b>{disease}</b></h3>", unsafe_allow_html=True)
-            st.progress(confidence / 100.0)
-            st.markdown(f"<div class='big-text'>📈 Confidence: <b>{confidence}%</b></div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='big-text'>🔶 Risk Level: <b>{risk}</b></div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='big-text'>👤 Age Group: <b>{age_group}</b></div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='big-text'>⚧ Gender: <b>{gender}</b></div>", unsafe_allow_html=True)
-
-            with st.expander("📘 Disease Description"):
-                st.write(description)
-
-            with st.expander("⚠️ Recommended Precautions"):
-                for i, p in enumerate(precautions, 1):
-                    st.markdown(f"{i}. {p}")
-        else:
-            st.warning("⚠️ Please select at least one symptom.")
-
-# Reset column
-with col2:
-    if st.button("🔄 Reset"):
-        st.session_state.history = []
-        st.experimental_rerun()
-
-# -------------------- Step 12: Frequency Plot --------------------
-st.markdown("### 📊 Top 15 Most Frequent Diseases in Dataset")
+# -------------------- Step 12: Disease Frequency Chart --------------------
+st.markdown("### 📊 Top 15 Disease Occurrences in Dataset")
 fig, ax = plt.subplots(figsize=(12, 6))
 sns.countplot(data=symptom_df, y="Disease", order=symptom_df["Disease"].value_counts().index[:15], palette="coolwarm", ax=ax)
-ax.set_title("Disease Frequency in Dataset", fontsize=16)
+ax.set_title("Disease Frequency", fontsize=16)
 st.pyplot(fig)
 
-# -------------------- Step 13: Prediction History --------------------
-if st.session_state.history:
-    st.markdown("### 🧾 Prediction History")
-    hist_df = pd.DataFrame(st.session_state.history)
-    st.dataframe(hist_df, use_container_width=True)
-
-# -------------------- Step 14: Footer --------------------
+# -------------------- Step 13: Footer --------------------
 st.markdown("""
 ---
 <div style='font-size:16px;'>
@@ -207,4 +215,5 @@ Developed with ❤️ using <b>Streamlit</b>
 <br>Author: <b>Your Name</b> | Research Intern @ <b>SPSU</b>
 </div>
 """, unsafe_allow_html=True)
+
 
