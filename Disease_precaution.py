@@ -3,20 +3,26 @@ import pandas as pd
 import numpy as np
 import joblib
 import re
-import os
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# -------------------- Load Model and Encoders --------------------
+# Load models and encoders
 model = joblib.load("disease_model.pkl")
 mlb = joblib.load("symptom_encoder.pkl")
 le = joblib.load("disease_encoder.pkl")
-
-# -------------------- Load Metadata --------------------
 precaution_df = pd.read_csv("Disease precaution.csv")
-desc_df = pd.read_csv("description.csv")
-desc_df["Disease"] = desc_df["Disease"].str.strip().str.lower()
-desc_dict = dict(zip(desc_df["Disease"], desc_df["Description"]))
+symptom_df = pd.read_csv("DiseaseAndSymptoms.csv")
 
-# -------------------- Utility Functions --------------------
+disease_descriptions = {
+    "aids": "AIDS weakens the immune system by destroying important cells that fight disease and infection.",
+    "acne": "A skin condition that occurs when hair follicles become clogged with oil and dead skin cells.",
+    "migraine": "A neurological condition causing intense, debilitating headaches.",
+    "diabetes": "A metabolic disease that causes high blood sugar levels over a prolonged period.",
+    "arthritis": "Inflammation of joints causing pain and stiffness.",
+    # ... Add all 41 descriptions
+}
+
+# Helper functions
 def predict_disease(symptom_list):
     processed = sorted(set(s.strip().lower() for s in symptom_list if s.strip()))
     input_vector = mlb.transform([processed])
@@ -28,9 +34,7 @@ def predict_disease(symptom_list):
 
 def get_precautions(disease_name):
     row = precaution_df[precaution_df['Disease'].str.lower() == disease_name.lower()]
-    if row.empty:
-        return ["No specific precautions listed."]
-    return row.iloc[0, 1:].dropna().tolist()
+    return row.iloc[0, 1:].dropna().tolist() if not row.empty else ["No precautions found."]
 
 def get_risk_level(num_symptoms):
     if num_symptoms >= 6:
@@ -40,67 +44,69 @@ def get_risk_level(num_symptoms):
     else:
         return "Low"
 
-# -------------------- Streamlit UI --------------------
-st.set_page_config(page_title="Disease Predictor Chat", layout="centered")
-st.markdown("""
-    <style>
-        h1, h2, h3, .stTextInput, .stSelectbox label, .stMarkdown {
-            font-size: 18px !important;
-        }
-        .stChatMessage, .stChatInput input {
-            font-size: 18px !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
+# Streamlit UI setup
+st.set_page_config(page_title="AI Disease Chatbot", layout="centered")
+st.title("💬 AI-Powered Disease Prediction Chatbot")
+st.markdown("Describe your symptoms below. Example: 'I have headache, fever and chills'")
 
-st.markdown("<h2 style='text-align: center; color:#2E86C1;'>💬 Chat with AI Disease Predictor</h2>", unsafe_allow_html=True)
-st.markdown("Enter symptoms like: 'I have fever, cough, chills'")
-
-# -------------------- Age & Gender Inputs --------------------
 col1, col2 = st.columns(2)
 with col1:
-    age_group = st.selectbox("👤 Age Group", ["< 18", "18 - 35", "36 - 60", "60+"], key="age")
+    age_group = st.selectbox("👤 Age Group", ["< 18", "18 - 35", "36 - 60", "60+"])
 with col2:
-    gender = st.selectbox("⚧ Gender", ["Male", "Female", "Other"], key="gender")
+    gender = st.selectbox("⚧ Gender", ["Male", "Female", "Other"])
 
-# -------------------- Initialize Chat Session --------------------
+# Chat session state
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 for msg in st.session_state.chat_history:
     st.chat_message(msg["role"]).markdown(msg["content"])
 
-# -------------------- Chat Input Box --------------------
-user_input = st.chat_input("Describe your symptoms...")
+user_input = st.chat_input("Enter your symptoms here...")
 
 if user_input:
     st.chat_message("user").markdown(user_input)
     st.session_state.chat_history.append({"role": "user", "content": user_input})
 
-    # Extract valid symptoms
-    raw_symptoms = re.split(",| and |\.|\n", user_input.lower())
+    # Extract symptoms from input
+    raw_symptoms = re.split(",| and |\n", user_input.lower())
     matched_symptoms = [s.strip() for s in raw_symptoms if s.strip() in mlb.classes_]
 
     if not matched_symptoms:
-        response = "❌ I couldn't recognize any valid symptoms. Please rephrase using common medical terms."
+        response = "❌ Sorry, I couldn't recognize any valid symptoms. Try using standard medical terms."
     else:
         disease, confidence = predict_disease(matched_symptoms)
-        risk = get_risk_level(len(matched_symptoms))
-        description = desc_dict.get(disease.lower(), "No description available.")
+        description = disease_descriptions.get(disease.lower(), "No description available.")
         precautions = get_precautions(disease)
+        risk = get_risk_level(len(matched_symptoms))
 
         response = f"""
-🧠 **Predicted Disease**: `{disease}`  
-📊 **Confidence**: `{confidence}%`  
-🔶 **Risk Level**: `{risk}`  
-👤 **Age Group**: `{age_group}`  
-⚧ **Gender**: `{gender}`  
+### 🧠 Predicted Disease: **{disease}**
+- 📈 Confidence: **{confidence}%**
+- 🔶 Risk Level: **{risk}**
+- 👤 Age Group: **{age_group}**
+- ⚧ Gender: **{gender}**
 
-📘 **Description**:
-> {description}
+**📘 Description:**
+{description}
 
-⚠️ **Precautions**:
+**⚠️ Precautions:**
 """ + "\n".join([f"- {p}" for p in precautions])
 
     st.chat_message("assistant").markdown(response)
     st.session_state.chat_history.append({"role": "assistant", "content": response})
+
+# Disease Frequency Plot
+st.markdown("---")
+st.subheader("📊 Top 15 Diseases in Dataset")
+fig, ax = plt.subplots(figsize=(12, 6))
+sns.countplot(data=symptom_df, y="Disease", order=symptom_df["Disease"].value_counts().index[:15], palette="coolwarm", ax=ax)
+ax.set_title("Most Common Diseases", fontsize=16)
+st.pyplot(fig)
+
+# Footer
+st.markdown("""
+---
+Developed with ❤️ using Streamlit  
+Author: **Your Name** | Research Intern @ **SPSU**
+""")
