@@ -8,7 +8,7 @@ import seaborn as sns
 from sklearn.preprocessing import MultiLabelBinarizer, LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-
+from fuzzywuzzy import process
 # -------------------- Step 1: Load and Preprocess Data --------------------
 symptom_df = pd.read_csv("DiseaseAndSymptoms.csv")
 precaution_df = pd.read_csv("Disease precaution.csv")
@@ -107,19 +107,25 @@ if user_input:
     st.chat_message("user").markdown(user_input)
     st.session_state.chat_history.append({"role": "user", "content": user_input})
 
-    # Extract known symptoms
     raw_symptoms = re.split(",| and |\n", user_input.lower())
-    matched_symptoms = [s.strip() for s in raw_symptoms if s.strip() in mlb.classes_]
+valid_symptoms = list(mlb.classes_)
 
-    if not matched_symptoms:
-        response = "❌ I couldn't detect any valid symptoms. Please use medical terms."
-    else:
-        disease, confidence = predict_disease(matched_symptoms)
-        precautions = get_precautions(disease)
-        description = disease_descriptions.get(disease.lower(), "No description available.")
-        risk = get_risk_level(len(matched_symptoms))
+matched_symptoms = []
+for s in raw_symptoms:
+    match = fuzzy_match(s.strip(), valid_symptoms)
+    if match:
+        matched_symptoms.append(match)
 
-        response = f"""
+if not matched_symptoms:
+    response = "❌ I couldn't detect any valid symptoms. Please use more recognizable medical terms."
+else:
+    disease, confidence = predict_disease(matched_symptoms)
+    description = disease_descriptions.get(disease.lower(), "No description available.")
+    precautions = get_precautions(disease)
+    risk = get_risk_level(len(matched_symptoms))
+
+    response = f"""
+
 ### 🧠 Predicted Disease: {disease}
 - 📈 Confidence: {confidence}%
 - 🔶 Risk Level: {risk}
