@@ -1,65 +1,73 @@
-# disease_model_trainer.py (Upgraded Version for "Uses of AI in Healthcare for Disease Prediction")
+
 
 import pandas as pd
 import numpy as np
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import MultiLabelBinarizer, LabelEncoder
 from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, accuracy_score
 from sklearn.utils import resample
 import joblib
-import streamlit as st
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-# -------------------- Step 1: Load Datasets --------------------
+# ---------------- Step 1: Load Datasets ----------------
 symptom_df = pd.read_csv("DiseaseAndSymptoms.csv")
-precaution_df = pd.read_csv("Disease precaution.csv")
-description_df = pd.read_csv("description.csv")
+severity_df = pd.read_csv("Symptom-severity.csv")
 
-# -------------------- Step 2: Preprocessing --------------------
+# ---------------- Step 2: Preprocessing ----------------
 symptom_cols = [col for col in symptom_df.columns if col.startswith("Symptom")]
 symptom_df[symptom_cols] = symptom_df[symptom_cols].fillna("")
-symptom_df['all_symptoms'] = symptom_df[symptom_cols].values.tolist()
-symptom_df['all_symptoms'] = symptom_df['all_symptoms'].apply(lambda x: sorted(set(sym.strip().lower() for sym in x if sym.strip() != "")))
-symptom_df['all_symptoms_str'] = symptom_df['all_symptoms'].apply(lambda x: ','.join(x))
-symptom_df.drop_duplicates(subset=['Disease', 'all_symptoms_str'], inplace=True)
 
-# -------------------- Step 3: Balance the Dataset --------------------
-min_count = symptom_df['Disease'].value_counts().min()
+# Convert each row to a list of unique, lowercase symptoms
+symptom_df["all_symptoms"] = symptom_df[symptom_cols].values.tolist()
+symptom_df["all_symptoms"] = symptom_df["all_symptoms"].apply(lambda x: sorted(set(sym.strip().lower() for sym in x if sym.strip() != "")))
+
+# Drop duplicates
+symptom_df["all_symptoms_str"] = symptom_df["all_symptoms"].apply(lambda x: ",".join(x))
+symptom_df.drop_duplicates(subset=["Disease", "all_symptoms_str"], inplace=True)
+
+# Balance dataset
+min_count = symptom_df["Disease"].value_counts().min()
 balanced_df = pd.concat([
     group.sample(min_count, random_state=42)
-    for _, group in symptom_df.groupby('Disease')
+    for _, group in symptom_df.groupby("Disease")
 ])
 
+# ---------------- Step 3: Convert Symptoms to Numerical ----------------
 mlb = MultiLabelBinarizer()
-X = mlb.fit_transform(balanced_df['all_symptoms'])
-le = LabelEncoder()
-y = le.fit_transform(balanced_df['Disease'])
+X = mlb.fit_transform(balanced_df["all_symptoms"])
+symptom_list = list(mlb.classes_)
 
-# -------------------- Step 4: Train-Test Split --------------------
+# Encode disease labels
+le = LabelEncoder()
+y = le.fit_transform(balanced_df["Disease"])
+
+# ---------------- Step 4: Train-Test Split ----------------
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# -------------------- Step 5: GridSearchCV Optimization --------------------
+# ---------------- Step 5: Model + Grid Search ----------------
 param_grid = {
     'n_estimators': [100, 150, 200],
     'max_depth': [10, 20, 30, None],
     'min_samples_split': [2, 5, 10]
 }
-model = GridSearchCV(RandomForestClassifier(random_state=42), param_grid, cv=3, n_jobs=-1, verbose=1)
-model.fit(X_train, y_train)
-best_model = model.best_estimator_
 
-# -------------------- Step 6: Evaluation --------------------
+base_model = RandomForestClassifier(random_state=42)
+grid_search = GridSearchCV(base_model, param_grid, cv=3, scoring='accuracy', verbose=1, n_jobs=-1)
+grid_search.fit(X_train, y_train)
+
+# Best model
+best_model = grid_search.best_estimator_
+print("Best Params:", grid_search.best_params_)
+
+# ---------------- Step 6: Evaluation ----------------
 y_pred = best_model.predict(X_test)
 print("Accuracy:", accuracy_score(y_test, y_pred))
 print(classification_report(y_test, y_pred, labels=np.unique(y), target_names=le.inverse_transform(np.unique(y)), zero_division=0))
 
-# -------------------- Step 7: Save Model --------------------
+# ---------------- Step 7: Save Final Model ----------------
 joblib.dump(best_model, "disease_model.pkl")
 joblib.dump(mlb, "symptom_encoder.pkl")
 joblib.dump(le, "disease_encoder.pkl")
-
 # -------------------- Step 8: Utility Functions --------------------
 def predict_multiple_diseases(symptom_list, top_n=3):
     model = joblib.load("disease_model.pkl")
