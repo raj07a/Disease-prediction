@@ -2,12 +2,15 @@
 
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import MultiLabelBinarizer, LabelEncoder
 from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, accuracy_score
 from sklearn.utils import resample
 import joblib
+import streamlit as st
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # ---------------- Step 1: Load Datasets ----------------
 symptom_df = pd.read_csv("DiseaseAndSymptoms.csv")
