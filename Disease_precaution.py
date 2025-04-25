@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # -------------------- Step 1: Load Datasets --------------------
-symptom_df = pd.read_csv("Diseaseandsymptoms.csv")
+symptom_df = pd.read_csv("DiseaseAndSymptoms.csv")
 precaution_df = pd.read_csv("Disease precaution.csv")
 
 # -------------------- Step 2: Preprocessing --------------------
