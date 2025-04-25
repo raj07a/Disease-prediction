@@ -1,5 +1,3 @@
-
-
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MultiLabelBinarizer, LabelEncoder
@@ -10,21 +8,22 @@ from sklearn.utils import resample
 import joblib
 import streamlit as st
 import matplotlib.pyplot as plt
-import seaborn as sns
 
-# ---------------- Step 1: Load Datasets ----------------
+# ---------------- Load Datasets ----------------
 symptom_df = pd.read_csv("DiseaseAndSymptoms.csv")
 severity_df = pd.read_csv("Symptom-severity.csv")
+description_df = pd.read_csv("symptom_Description.csv")     # Make sure this file exists
+precaution_df = pd.read_csv("symptom_precaution.csv")       # Make sure this file exists
 
-# ---------------- Step 2: Preprocessing ----------------
+# ---------------- Preprocessing ----------------
 symptom_cols = [col for col in symptom_df.columns if col.startswith("Symptom")]
 symptom_df[symptom_cols] = symptom_df[symptom_cols].fillna("")
 
-# Convert each row to a list of unique, lowercase symptoms
 symptom_df["all_symptoms"] = symptom_df[symptom_cols].values.tolist()
-symptom_df["all_symptoms"] = symptom_df["all_symptoms"].apply(lambda x: sorted(set(sym.strip().lower() for sym in x if sym.strip() != "")))
+symptom_df["all_symptoms"] = symptom_df["all_symptoms"].apply(
+    lambda x: sorted(set(sym.strip().lower() for sym in x if sym.strip() != ""))
+)
 
-# Drop duplicates
 symptom_df["all_symptoms_str"] = symptom_df["all_symptoms"].apply(lambda x: ",".join(x))
 symptom_df.drop_duplicates(subset=["Disease", "all_symptoms_str"], inplace=True)
 
@@ -35,43 +34,32 @@ balanced_df = pd.concat([
     for _, group in symptom_df.groupby("Disease")
 ])
 
-# ---------------- Step 3: Convert Symptoms to Numerical ----------------
+# ---------------- Vectorize Symptoms ----------------
 mlb = MultiLabelBinarizer()
 X = mlb.fit_transform(balanced_df["all_symptoms"])
 symptom_list = list(mlb.classes_)
 
-# Encode disease labels
 le = LabelEncoder()
 y = le.fit_transform(balanced_df["Disease"])
 
-# ---------------- Step 4: Train-Test Split ----------------
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# ---------------- Step 5: Model + Grid Search ----------------
+# ---------------- Model Training ----------------
 param_grid = {
-    'n_estimators': [100, 150, 200],
-    'max_depth': [10, 20, 30, None],
-    'min_samples_split': [2, 5, 10]
+    'n_estimators': [100, 150],
+    'max_depth': [10, 20, None],
+    'min_samples_split': [2, 5]
 }
-
-base_model = RandomForestClassifier(random_state=42)
-grid_search = GridSearchCV(base_model, param_grid, cv=3, scoring='accuracy', verbose=1, n_jobs=-1)
+grid_search = GridSearchCV(RandomForestClassifier(random_state=42), param_grid, cv=3, scoring='accuracy', verbose=0)
 grid_search.fit(X_train, y_train)
-
-# Best model
 best_model = grid_search.best_estimator_
-print("Best Params:", grid_search.best_params_)
 
-# ---------------- Step 6: Evaluation ----------------
-y_pred = best_model.predict(X_test)
-print("Accuracy:", accuracy_score(y_test, y_pred))
-print(classification_report(y_test, y_pred, labels=np.unique(y), target_names=le.inverse_transform(np.unique(y)), zero_division=0))
-
-# ---------------- Step 7: Save Final Model ----------------
+# ---------------- Save Model ----------------
 joblib.dump(best_model, "disease_model.pkl")
 joblib.dump(mlb, "symptom_encoder.pkl")
 joblib.dump(le, "disease_encoder.pkl")
-# -------------------- Step 8: Utility Functions --------------------
+
+# ---------------- Prediction Utilities ----------------
 def predict_multiple_diseases(symptom_list, top_n=3):
     model = joblib.load("disease_model.pkl")
     mlb = joblib.load("symptom_encoder.pkl")
@@ -87,7 +75,7 @@ def predict_multiple_diseases(symptom_list, top_n=3):
 def get_precautions(disease):
     row = precaution_df[precaution_df['Disease'].str.lower() == disease.lower()]
     if row.empty:
-        return []
+        return ["No precautions available."]
     return row.iloc[0, 1:].dropna().tolist()
 
 def get_description(disease):
@@ -96,13 +84,13 @@ def get_description(disease):
         return "Description not available."
     return row.iloc[0]['Description']
 
-# -------------------- Step 9: Streamlit UI --------------------
-st.set_page_config(page_title="Disease Predictor AI", layout="centered")
-st.markdown("<h1 style='text-align: center; color:#2E86C1;'>🤖 AI-Powered Disease Predictor</h1>", unsafe_allow_html=True)
+# ---------------- Streamlit UI ----------------
+st.set_page_config(page_title="AI Disease Predictor", layout="centered")
+st.markdown("<h1 style='text-align:center; color:#2E86C1;'>🤖 AI Disease Predictor</h1>", unsafe_allow_html=True)
 
 valid_symptoms = list(mlb.classes_)
-user_symptoms = st.multiselect("🩺 Select Symptoms:", options=valid_symptoms)
-age_group = st.selectbox("👤 Age Group:", ["< 18", "18 - 35", "36 - 60", "60+"])
+user_symptoms = st.multiselect("🩺 Select your symptoms:", options=valid_symptoms)
+age_group = st.selectbox("👤 Age Group:", ["<18", "18-35", "36-60", "60+"])
 gender = st.selectbox("⚧ Gender:", ["Male", "Female", "Other"])
 
 def get_risk_level(sym_count):
@@ -119,10 +107,10 @@ if st.button("🔍 Predict Disease"):
 
             st.markdown(f"<h3 style='color:green;'>🧠 Predicted Disease: <b>{disease}</b></h3>", unsafe_allow_html=True)
             st.progress(confidence / 100.0)
-            st.markdown(f"<div style='font-size:18px;'>📈 Confidence: <b>{confidence}%</b></div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='font-size:18px;'>🔶 Risk Level: <b>{risk}</b></div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='font-size:18px;'>👤 Age Group: <b>{age_group}</b></div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='font-size:18px;'>⚧ Gender: <b>{gender}</b></div>", unsafe_allow_html=True)
+            st.markdown(f"📈 Confidence: **{confidence}%**")
+            st.markdown(f"🔶 Risk Level: **{risk}**")
+            st.markdown(f"👤 Age Group: **{age_group}**")
+            st.markdown(f"⚧ Gender: **{gender}**")
 
             with st.expander("📘 Disease Description"):
                 st.write(description)
@@ -131,20 +119,21 @@ if st.button("🔍 Predict Disease"):
                 for i, p in enumerate(precautions, 1):
                     st.markdown(f"{i}. {p}")
     else:
-        st.warning("⚠️ Please select at least one symptom.")
+        st.warning("⚠️ Please select at least one symptom to proceed.")
 
-# -------------------- Step 10: Visualization --------------------
+# ---------------- Visualization ----------------
 st.markdown("### 📊 Top 15 Disease Occurrences")
-fig, ax = plt.subplots(figsize=(12, 6))
-sns.countplot(data=symptom_df, y="Disease", order=symptom_df["Disease"].value_counts().index[:15], palette="coolwarm", ax=ax)
-ax.set_title("Disease Frequency", fontsize=16)
+top15 = symptom_df["Disease"].value_counts().nlargest(15)
+fig, ax = plt.subplots(figsize=(10, 6))
+top15.plot(kind='barh', ax=ax, color='skyblue')
+ax.set_title("Most Common Diseases")
+ax.set_xlabel("Count")
 st.pyplot(fig)
 
-# -------------------- Footer --------------------
+# ---------------- Footer ----------------
 st.markdown("""
 ---
-<div style='font-size:16px;'>
-
-Author: <b>RAJA RAWAT</b> | Research Intern @ <b>SPSU</b>
+<div style='font-size:16px; text-align:center;'>
+Created by <b>RAJA RAWAT</b> | Research Intern @ <b>SPSU</b>
 </div>
 """, unsafe_allow_html=True)
