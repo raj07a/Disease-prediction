@@ -1,7 +1,4 @@
 
-markdown
-Copy
-Edit
 # 🤖 AI-Powered Intelligent Disease Prediction System
 
 ## 📚 Introduction
